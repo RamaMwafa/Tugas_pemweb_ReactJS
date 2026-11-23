@@ -1,93 +1,163 @@
-import { useState } from "react"
-import Button from "../../atoms/Button"
-import ProductModel from "../../../data/product/model/product-model.ts"
-import ProductRemote from "../../../data/product/source/product-remote.ts"
-import ProductRepository from "../../../data/product/repository/product-repository.ts"
-import ProductGrid from "../../organisms/ProductGrid"
-import styles from "./styles.module.css"
+import { useEffect, useState } from "react";
+import type { Product, ProductPayload } from "../../../data/product/model/product.model";
+import { productRepository } from "../../../data/product/repository/product.repository";
+import { Button } from "../../atoms/Button";
+import { SearchBar } from "../../molecules/SearchBar";
+import { ProductGrid } from "../../organisms/ProductGrid";
+import { ProductFormModal } from "../../organisms/ProductFormModal";
+import { DeleteModal } from "../../organisms/DeleteModal";
 
-const exampleProducts = [
-    ProductModel.fromResponse({ id: 1, name: "Pulpen", price: 5000 }).toJSON(),
-]
-const repository = ProductRepository(
-    ProductRemote({ baseUrl: import.meta.env.VITE_API_BASE_URL ?? "" }),
-)
+type ActiveModal =
+  | { type: "add" }
+  | { type: "edit"; product: Product }
+  | { type: "delete"; product: Product }
+  | null;
 
-export default function ProductsPage() {
-    const [products, setProducts] = useState(exampleProducts)
-    const [isLoading, setIsLoading] = useState(false)
-    const [error, setError] = useState("")
-    const [message, setMessage] = useState("")
-    const [selectedProductId, setSelectedProductId] = useState<number | null>(
-        null,
-    )
-    const selectedProduct = products.find(
-        (product) => product.id === selectedProductId,
-    )
+export function ProductsPage() {
+  const [products, setProducts] = useState<Product[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeModal, setActiveModal] = useState<ActiveModal>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
 
-    async function handleLoadProducts() {
-        setIsLoading(true)
-        setError("")
-        setMessage("Memuat produk…")
-        try {
-            const models = await repository.getProductList()
-            setProducts(models.map((model) => model.toJSON()))
-            setSelectedProductId(null)
-            setMessage(`${models.length} produk berhasil dimuat dari API.`)
-        } catch (error) {
-            setError(
-                error instanceof Error ? error.message : "Gagal memuat produk.",
-            )
-            setMessage("")
-        } finally {
-            setIsLoading(false)
-        }
+  const loadProducts = async () => {
+    try {
+      setIsLoading(true);
+      setErrorMessage("");
+      const list = await productRepository.getProducts();
+      setProducts(list);
+    } catch (err) {
+      setErrorMessage(
+        err instanceof Error ? err.message : "Gagal memuat produk dari server."
+      );
+    } finally {
+      setIsLoading(false);
     }
+  };
 
-    function handleSelectProduct(id: number) {
-        setSelectedProductId(id)
-        setMessage("")
+  useEffect(() => {
+    void loadProducts();
+  }, []);
+
+  const filteredProducts = products.filter((item) =>
+    item.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const handleSave = async (payload: ProductPayload, id?: number) => {
+    try {
+      setIsSubmitting(true);
+      if (id === undefined) {
+        const created = await productRepository.createProduct(payload);
+        setProducts((prev) => [...prev, created]);
+      } else {
+        const updated = await productRepository.updateProduct(id, payload);
+        setProducts((prev) =>
+          prev.map((item) => (item.id === id ? updated : item))
+        );
+      }
+      setActiveModal(null);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Gagal menyimpan produk.");
+    } finally {
+      setIsSubmitting(false);
     }
+  };
 
-    return (
-        <>
-            <header className={styles.header}>
-                <p className={styles.eyebrow}>Starter pembelajaran React</p>
-                <h1 className={styles.title}>Manajemen Produk</h1>
-                <p className={styles.description}>
-                    Satu contoh komponen untuk setiap tingkat Atomic Design.
-                    Kembangkan fitur berikutnya sesuai PRD.
-                </p>
-            </header>
-            <div className={styles.toolbar}>
-                <Button onClick={handleLoadProducts} disabled={isLoading}>
-                    {isLoading ? "Memuat…" : "Muat dari API"}
-                </Button>
-                <p className={styles.hint}>
-                    Opsional: gunakan backend Anda sendiri. Saat halaman dibuka,
-                    tidak ada request API.
-                </p>
-            </div>
-            {error && (
-                <p role="alert" className={styles.error}>
-                    {error}
-                </p>
-            )}
-            <section aria-label="Contoh daftar produk" aria-busy={isLoading}>
-                {products.length === 0 && (
-                    <p className={styles.notice}>Belum ada produk dari API.</p>
-                )}
-                <ProductGrid
-                    products={products}
-                    onSelect={handleSelectProduct}
-                />
-            </section>
-            <p role="status" className={styles.notice}>
-                {message ||
-                    (selectedProduct
-                        ? `Produk dipilih: ${selectedProduct.name}.`
-                        : "Klik Pilih produk untuk mempelajari callback dari kartu ke halaman.")}
-            </p>
-        </>
-    )
+  const handleDelete = async (id: number) => {
+    try {
+      setIsSubmitting(true);
+      await productRepository.deleteProduct(id);
+      setProducts((prev) => prev.filter((item) => item.id !== id));
+      setActiveModal(null);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Gagal menghapus produk.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div>
+      <section className="mb-7 flex flex-col justify-between gap-4 border-b border-stone-border pb-5 sm:flex-row sm:items-end">
+        <div>
+          <h1 className="text-3xl font-bold text-navy sm:text-4xl">
+            Daftar Produk
+          </h1>
+          <p className="mt-1 text-sm text-muted">
+            Kelola katalog produk yang terhubung langsung dengan backend API.
+          </p>
+        </div>
+        <Button variant="primary" onClick={() => setActiveModal({ type: "add" })}>
+          + Tambah Produk
+        </Button>
+      </section>
+
+      <div className="mb-6 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+        <SearchBar value={searchQuery} onChange={setSearchQuery} />
+        <span className="text-sm font-medium tabular-nums text-olive">
+          {products.length} produk tersedia
+        </span>
+      </div>
+
+      {isLoading ? (
+        <div className="rounded-xl border border-stone-border bg-stone/60 p-10 text-center text-sm text-muted">
+          Memuat data produk dari server...
+        </div>
+      ) : errorMessage ? (
+        <div className="rounded-xl border border-rust/40 bg-rust/10 p-6 text-center">
+          <p className="text-sm font-medium text-rust">{errorMessage}</p>
+          <Button variant="primary" className="mt-3" onClick={() => void loadProducts()}>
+            Muat Ulang
+          </Button>
+        </div>
+      ) : filteredProducts.length > 0 ? (
+        <ProductGrid
+          products={filteredProducts}
+          onEdit={(product) => setActiveModal({ type: "edit", product })}
+          onDelete={(product) => setActiveModal({ type: "delete", product })}
+        />
+      ) : (
+        <div className="rounded-xl border border-dashed border-stone-border bg-stone/50 p-10 text-center text-sm text-muted">
+          {searchQuery
+            ? `Tidak ada produk yang cocok dengan pencarian "${searchQuery}".`
+            : "Belum ada data produk di server."}
+        </div>
+      )}
+
+      <footer className="mt-8 border-t border-stone-border pt-4 text-xs text-muted">
+        Menampilkan {filteredProducts.length} dari {products.length} produk
+      </footer>
+
+      {activeModal?.type === "add" && (
+        <ProductFormModal
+          mode="add"
+          isSubmitting={isSubmitting}
+          onClose={() => setActiveModal(null)}
+          onSave={handleSave}
+        />
+      )}
+
+      {activeModal?.type === "edit" && (
+        <ProductFormModal
+          mode="edit"
+          initialData={activeModal.product}
+          isSubmitting={isSubmitting}
+          onClose={() => setActiveModal(null)}
+          onSave={handleSave}
+        />
+      )}
+
+      {activeModal?.type === "delete" && (
+        <DeleteModal
+          product={activeModal.product}
+          isDeleting={isSubmitting}
+          onClose={() => setActiveModal(null)}
+          onConfirm={handleDelete}
+        />
+      )}
+    </div>
+  );
 }
+
+export default ProductsPage;

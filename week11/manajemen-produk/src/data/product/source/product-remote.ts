@@ -1,45 +1,58 @@
-import ProductListParam from "../param/product-list-param.ts"
+import type { ProductPayload } from "../model/product.model";
 
-export type ProductRemoteSource = {
-    getProductListRemote: (param?: ProductListParam) => Promise<unknown>
+const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000/api";
+const PRODUCTS_ENDPOINT = `${BASE_URL}/products`;
+
+async function handleResponse(response: Response): Promise<unknown> {
+  const json: unknown = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    const message =
+      typeof json === "object" &&
+      json !== null &&
+      "message" in json &&
+      typeof (json as { message: unknown }).message === "string"
+        ? (json as { message: string }).message
+        : `Request gagal dengan status ${response.status}`;
+    throw new Error(message);
+  }
+
+  return json;
 }
 
-type ProductRemoteOptions = {
-    baseUrl?: string
-    fetchImpl?: typeof fetch
-}
+export const productSource = {
+  async fetchAll(): Promise<unknown> {
+    const response = await fetch(PRODUCTS_ENDPOINT);
+    return handleResponse(response);
+  },
 
-// Sends HTTP requests and returns the unvalidated JSON payload.
-export default function ProductRemote({
-    baseUrl = "",
-    fetchImpl = fetch,
-}: ProductRemoteOptions = {}): ProductRemoteSource {
-    async function getProductListRemote(
-        param = new ProductListParam(),
-    ): Promise<unknown> {
-        if (!baseUrl.trim()) {
-            throw new Error(
-                "Isi VITE_API_BASE_URL di .env.local terlebih dahulu.",
-            )
-        }
+  async fetchById(id: number | string): Promise<unknown> {
+    const response = await fetch(`${PRODUCTS_ENDPOINT}/${id}`);
+    return handleResponse(response);
+  },
 
-        const url = new URL(`${baseUrl.replace(/\/+$/, "")}/products`)
-        if (!["http:", "https:"].includes(url.protocol)) {
-            throw new Error("URL API harus menggunakan http atau https.")
-        }
-        url.search = param.toQueryString()
+  async create(payload: ProductPayload): Promise<unknown> {
+    const response = await fetch(PRODUCTS_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    return handleResponse(response);
+  },
 
-        const response = await fetchImpl(url, {
-            method: "GET",
-            headers: { Accept: "application/json" },
-        })
+  async update(id: number | string, payload: ProductPayload): Promise<unknown> {
+    const response = await fetch(`${PRODUCTS_ENDPOINT}/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    return handleResponse(response);
+  },
 
-        if (!response.ok) {
-            throw new Error(`Gagal memuat produk (HTTP ${response.status}).`)
-        }
-
-        return response.json()
-    }
-
-    return { getProductListRemote }
-}
+  async remove(id: number | string): Promise<unknown> {
+    const response = await fetch(`${PRODUCTS_ENDPOINT}/${id}`, {
+      method: "DELETE",
+    });
+    return handleResponse(response);
+  },
+};

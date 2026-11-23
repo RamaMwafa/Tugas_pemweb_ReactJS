@@ -1,0 +1,32 @@
+@import url("https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Inter:wght@400;500;600;700&display=swap");
+@import "tailwindcss";
+
+@theme {
+  --color-parchment: #f8f4ec;
+  --color-parchment-light: #fcfaf6;
+  --color-navy: #1c2a3a;
+  --color-navy-dark: #141f2b;
+  --color-olive: #4a5d4e;
+  --color-stone: #dfd7c8;
+  --color-stone-border: #c7bdaa;
+  --color-bronze: #8a6534;
+  --color-espresso: #1e1b18;
+  --color-muted: #575047;
+  --color-rust: #8b3a3a;
+  --color-rust-dark: #702c2c;
+
+  --font-serif: "Cormorant Garamond", Georgia, serif;
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+@layer base {
+  body {
+    @apply bg-parchment text-espresso font-sans antialiased;
+  }
+
+  h1,
+  h2,
+  h3 {
+    @apply font-serif text-espresso tracking-tight;
+  }
+}
